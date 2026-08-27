@@ -14,7 +14,6 @@ import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.view.Gravity;
-import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -24,80 +23,57 @@ import java.util.Locale;
 public class MainActivity extends Activity {
     private SpeechRecognizer recognizer;
     private TextToSpeech tts;
-    private TextView tvStatus, tvResponse;
-    private Button btnSpeak;
+    private TextView tvStatus;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Allow to open over Lock Screen
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true);
-            setTurnScreenOn(true);
-        } else {
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
-                                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
-                                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        }
-
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setGravity(Gravity.CENTER);
-        layout.setBackgroundColor(Color.parseColor("#050B14"));
-        layout.setPadding(60, 60, 60, 60);
+        layout.setBackgroundColor(Color.parseColor("#070D18"));
+        layout.setPadding(50, 50, 50, 50);
 
-        TextView tvTitle = new TextView(this);
-        tvTitle.setText("⚡ HARBOUR / JARVIS ⚡");
-        tvTitle.setTextSize(24);
-        tvTitle.setTextColor(Color.parseColor("#00E5FF"));
-        tvTitle.setGravity(Gravity.CENTER);
-        tvTitle.setPadding(0, 0, 0, 40);
+        TextView title = new TextView(this);
+        title.setText("⚡ JARVIS CORE ⚡");
+        title.setTextSize(26);
+        title.setTextColor(Color.parseColor("#00E5FF"));
+        title.setGravity(Gravity.CENTER);
+        title.setPadding(0, 0, 0, 40);
 
         tvStatus = new TextView(this);
-        tvStatus.setText("Tap button or say 'Harbour'...");
-        tvStatus.setTextSize(16);
+        tvStatus.setText("Checking permissions...");
         tvStatus.setTextColor(Color.WHITE);
+        tvStatus.setTextSize(16);
         tvStatus.setGravity(Gravity.CENTER);
-        tvStatus.setPadding(0, 0, 0, 20);
+        tvStatus.setPadding(0, 0, 0, 30);
 
-        tvResponse = new TextView(this);
-        tvResponse.setText("");
-        tvResponse.setTextSize(14);
-        tvResponse.setTextColor(Color.parseColor("#38BDF8"));
-        tvResponse.setGravity(Gravity.CENTER);
-        tvResponse.setPadding(0, 0, 0, 40);
+        Button btnPerm = new Button(this);
+        btnPerm.setText("1. Grant Overlay Permission");
+        btnPerm.setBackgroundColor(Color.parseColor("#0284C7"));
+        btnPerm.setTextColor(Color.WHITE);
+        btnPerm.setOnClickListener(v -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            }
+        });
 
-        btnSpeak = new Button(this);
-        btnSpeak.setText("🎙️ ACTIVATE ASSISTANT");
-        btnSpeak.setTextSize(18);
-        btnSpeak.setBackgroundColor(Color.parseColor("#0284C7"));
+        Button btnSpeak = new Button(this);
+        btnSpeak.setText("🎙️ Test Voice & Neon Smoke");
+        btnSpeak.setBackgroundColor(Color.parseColor("#10B981"));
         btnSpeak.setTextColor(Color.WHITE);
-        btnSpeak.setPadding(30, 30, 30, 30);
+        btnSpeak.setPadding(0, 20, 0, 20);
+        btnSpeak.setOnClickListener(v -> startVoiceRecognition());
 
-        layout.addView(tvTitle);
+        layout.addView(title);
         layout.addView(tvStatus);
-        layout.addView(tvResponse);
+        layout.addView(btnPerm);
         layout.addView(btnSpeak);
         setContentView(layout);
 
-        // Overlay Permission Check
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
-            startActivity(intent);
-        }
-
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
-            checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED ||
-            checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED ||
-            checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.CALL_PHONE,
-                Manifest.permission.READ_CONTACTS,
-                Manifest.permission.CAMERA
-            }, 101);
-        }
+        checkAndRequestPermissions();
 
         tts = new TextToSpeech(this, status -> {
             if (status == TextToSpeech.SUCCESS) {
@@ -110,38 +86,24 @@ public class MainActivity extends Activity {
             @Override
             public void onResults(Bundle bundle) {
                 stopService(new Intent(MainActivity.this, JarvisOverlayService.class));
-                ArrayList<String> data = bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                if (data != null && !data.isEmpty()) {
-                    String query = data.get(0);
-                    tvStatus.setText("Command: " + query);
-                    
-                    TaskController.handleCommand(MainActivity.this, query, () -> {
-                        tvResponse.setText("Jarvis Thinking...");
-                        GeminiClient.askGemini(query, new GeminiClient.Callback() {
-                            @Override
-                            public void onResponse(String reply) {
-                                runOnUiThread(() -> {
-                                    tvResponse.setText("AI: " + reply);
-                                    tts.speak(reply, TextToSpeech.QUEUE_FLUSH, null, null);
-                                });
-                            }
-                            @Override
-                            public void onError(String error) {
-                                runOnUiThread(() -> {
-                                    tts.speak("Aapki request process ho gayi.", TextToSpeech.QUEUE_FLUSH, null, null);
-                                });
-                            }
-                        });
+                ArrayList<String> matches = bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                if (matches != null && !matches.isEmpty()) {
+                    String query = matches.get(0);
+                    tvStatus.setText("User: " + query);
+                    boolean done = TaskController.handleCommand(MainActivity.this, query, () -> {
+                        tts.speak("Aapki request process ki ja rahi hai.", TextToSpeech.QUEUE_FLUSH, null, null);
                     });
                 }
             }
             @Override public void onReadyForSpeech(Bundle bundle) {
                 tvStatus.setText("Listening...");
-                startService(new Intent(MainActivity.this, JarvisOverlayService.class));
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(MainActivity.this)) {
+                    startService(new Intent(MainActivity.this, JarvisOverlayService.class));
+                }
             }
             @Override public void onError(int i) {
                 stopService(new Intent(MainActivity.this, JarvisOverlayService.class));
-                tvStatus.setText("Ready");
+                tvStatus.setText("Ready. Tap to speak.");
             }
             @Override public void onBeginningOfSpeech() {}
             @Override public void onRmsChanged(float v) {}
@@ -150,11 +112,23 @@ public class MainActivity extends Activity {
             @Override public void onPartialResults(Bundle bundle) {}
             @Override public void onEvent(int i, Bundle bundle) {}
         });
-
-        btnSpeak.setOnClickListener(v -> startListening());
     }
 
-    private void startListening() {
+    private void checkAndRequestPermissions() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{
+                Manifest.permission.RECORD_AUDIO,
+                Manifest.permission.CALL_PHONE,
+                Manifest.permission.READ_CONTACTS,
+                Manifest.permission.CAMERA
+            }, 100);
+        }
+    }
+
+    private void startVoiceRecognition() {
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN");

@@ -1,79 +1,86 @@
 package com.mycompany.jarvis;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.IBinder;
 import android.view.Gravity;
 import android.view.WindowManager;
-import android.widget.LinearLayout;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 
 public class JarvisOverlayService extends Service {
     private WindowManager wm;
-    private LinearLayout overlayLayout;
+    private FrameLayout container;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        startForegroundServiceNotification();
+
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+        container = new FrameLayout(this);
 
-        overlayLayout = new LinearLayout(this);
-        overlayLayout.setOrientation(LinearLayout.VERTICAL);
-        overlayLayout.setGravity(Gravity.CENTER);
-        overlayLayout.setPadding(30, 20, 30, 20);
+        NeonSmokeView neonView = new NeonSmokeView(this);
+        container.addView(neonView, new FrameLayout.LayoutParams(600, 600));
 
-        // Glowing Blue Circular Arc Design
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.OVAL);
-        shape.setColor(Color.parseColor("#E60F172A"));
-        shape.setStroke(6, Color.parseColor("#00E5FF"));
-        overlayLayout.setBackground(shape);
+        TextView tv = new TextView(this);
+        tv.setText("⚡ HARBOUR AI ⚡\nListening...");
+        tv.setTextColor(Color.WHITE);
+        tv.setTextSize(14);
+        tv.setGravity(Gravity.CENTER);
 
-        TextView tvTitle = new TextView(this);
-        tvTitle.setText("⚡ HARBOUR AI ⚡");
-        tvTitle.setTextColor(Color.parseColor("#00E5FF"));
-        tvTitle.setTextSize(16);
-        tvTitle.setGravity(Gravity.CENTER);
-
-        TextView tvSub = new TextView(this);
-        tvSub.setText("Listening...");
-        tvSub.setTextColor(Color.WHITE);
-        tvSub.setTextSize(12);
-        tvSub.setGravity(Gravity.CENTER);
-
-        overlayLayout.addView(tvTitle);
-        overlayLayout.addView(tvSub);
+        FrameLayout.LayoutParams tvParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+        );
+        tvParams.gravity = Gravity.CENTER;
+        container.addView(tv, tvParams);
 
         int layoutFlag = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O 
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY 
                 : WindowManager.LayoutParams.TYPE_PHONE;
 
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
+                600, 600,
                 layoutFlag,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT
         );
 
         params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        params.y = 120;
+        params.y = 80;
 
         try {
-            wm.addView(overlayLayout, params);
+            wm.addView(container, params);
         } catch (Exception ignored) {}
+    }
+
+    private void startForegroundServiceNotification() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel("jarvis_overlay", "Jarvis Active", NotificationManager.IMPORTANCE_LOW);
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.createNotificationChannel(channel);
+            Notification notification = new Notification.Builder(this, "jarvis_overlay")
+                    .setContentTitle("Jarvis Engine Active")
+                    .setContentText("Listening for commands")
+                    .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                    .build();
+            startForeground(101, notification);
+        }
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-        if (overlayLayout != null && wm != null) {
+        if (container != null && wm != null) {
             try {
-                wm.removeView(overlayLayout);
+                wm.removeView(container);
             } catch (Exception ignored) {}
         }
     }
